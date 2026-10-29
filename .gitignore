@@ -1,0 +1,6 @@
+# Ignore local temporary or OS-generated files
+.DS_Store
+*.log
+*.tmp
+*.swp
+*~
