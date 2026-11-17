@@ -18,6 +18,17 @@ FORCE=false
 FILTER_TYPE="all"
 SCAN_PATHS=()
 
+format_kb() {
+    local kb="$1"
+    if [ "$kb" -ge 1048576 ]; then
+        awk "BEGIN {printf \"%.2f GB\", $kb/1048576}"
+    elif [ "$kb" -ge 1024 ]; then
+        awk "BEGIN {printf \"%.2f MB\", $kb/1024}"
+    else
+        echo "${kb} KB"
+    fi
+}
+
 show_help() {
     cat << 'EOF'
 Usage: ./cleanup_artifacts.sh [OPTIONS] [DIRECTORY...]
@@ -136,6 +147,10 @@ if [ ${#RESOLVED_PATHS[@]} -eq 0 ]; then
     exit 1
 fi
 
+PRIMARY_ROOT="${RESOLVED_PATHS[0]}"
+START_USED_KB=$(df -kP "$PRIMARY_ROOT" | awk 'NR==2 {print $3}')
+START_AVAIL_KB=$(df -kP "$PRIMARY_ROOT" | awk 'NR==2 {print $4}')
+
 echo "=========================================================="
 echo " Project Build & Package Artifacts Cleanup"
 if [ "$DRY_RUN" = true ]; then
@@ -144,6 +159,9 @@ else
     echo " MODE: ACTIVE CLEANUP"
 fi
 echo " Filter: $FILTER_TYPE"
+echo " Initial Storage ($PRIMARY_ROOT):"
+echo "   Used:      $(format_kb "$START_USED_KB")"
+echo "   Available: $(format_kb "$START_AVAIL_KB")"
 echo " Scanning directories:"
 for rp in "${RESOLVED_PATHS[@]}"; do
     echo "   - $rp"
@@ -279,14 +297,7 @@ if [ "$COUNT" -eq 0 ]; then
     exit 0
 fi
 
-# Format human readable total
-if [ "$TOTAL_KB" -ge 1048576 ]; then
-    TOTAL_STR=$(awk "BEGIN {printf \"%.2f GB\", $TOTAL_KB/1048576}")
-elif [ "$TOTAL_KB" -ge 1024 ]; then
-    TOTAL_STR=$(awk "BEGIN {printf \"%.2f MB\", $TOTAL_KB/1024}")
-else
-    TOTAL_STR="${TOTAL_KB} KB"
-fi
+TOTAL_STR=$(format_kb "$TOTAL_KB")
 
 echo ""
 echo "Discovered Artifacts ($COUNT items, $TOTAL_STR reclaimable):"
@@ -330,11 +341,23 @@ for ((i=0; i<COUNT; i++)); do
     DELETED_COUNT=$((DELETED_COUNT + 1))
 done
 
+END_USED_KB=$(df -kP "$PRIMARY_ROOT" | awk 'NR==2 {print $3}')
+END_AVAIL_KB=$(df -kP "$PRIMARY_ROOT" | awk 'NR==2 {print $4}')
+DIFF_USED_KB=$((START_USED_KB - END_USED_KB))
+
 echo ""
 echo "=========================================================="
 echo " Project Artifacts Cleanup Complete!"
-echo " Deleted: $DELETED_COUNT directories"
-echo " Space Reclaimed: ~$TOTAL_STR"
+echo " Deleted:     $DELETED_COUNT directories"
+echo " Directory Sum Reclaimed: ~$TOTAL_STR"
+echo " Storage Comparison ($PRIMARY_ROOT):"
+echo "   Before:    $(format_kb "$START_USED_KB") used, $(format_kb "$START_AVAIL_KB") available"
+echo "   After:     $(format_kb "$END_USED_KB") used, $(format_kb "$END_AVAIL_KB") available"
+if [ "$DIFF_USED_KB" -gt 0 ]; then
+    echo "   Reclaimed: $(format_kb "$DIFF_USED_KB")"
+else
+    echo "   Reclaimed: ~$TOTAL_STR"
+fi
 echo " Note: You can redownload or regenerate packages anytime"
 echo " (e.g. npm install, cargo build, python -m venv .venv)."
 echo "=========================================================="

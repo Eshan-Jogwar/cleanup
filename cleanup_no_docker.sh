@@ -13,6 +13,17 @@ RUN_SYSTEM=false
 RUN_DEEP=false
 DRY_RUN=false
 
+format_kb() {
+    local kb="$1"
+    if [ "$kb" -ge 1048576 ]; then
+        awk "BEGIN {printf \"%.2f GB\", $kb/1048576}"
+    elif [ "$kb" -ge 1024 ]; then
+        awk "BEGIN {printf \"%.2f MB\", $kb/1024}"
+    else
+        echo "${kb} KB"
+    fi
+}
+
 show_help() {
     cat << 'EOF'
 Usage: ./cleanup_no_docker.sh [OPTIONS]
@@ -84,6 +95,9 @@ if [ -z "$TARGET_HOME" ] || [ ! -d "$TARGET_HOME" ]; then
     TARGET_HOME="$HOME"
 fi
 
+START_USED_KB=$(df -kP "$TARGET_HOME" | awk 'NR==2 {print $3}')
+START_AVAIL_KB=$(df -kP "$TARGET_HOME" | awk 'NR==2 {print $4}')
+
 echo "=========================================================="
 echo " Non-Docker Developer Disk Cleanup"
 echo " Target User: $TARGET_USER ($TARGET_HOME)"
@@ -102,11 +116,9 @@ else
 fi
 echo "=========================================================="
 
-echo "--> Initial Disk Space:"
-df -h "$TARGET_HOME"
-if [ "$RUN_SYSTEM" = true ]; then
-    df -h /
-fi
+echo "--> Initial Disk Space ($TARGET_HOME):"
+echo "   Used:      $(format_kb "$START_USED_KB")"
+echo "   Available: $(format_kb "$START_AVAIL_KB")"
 echo "=========================================================="
 
 # Safe directory deletion helper
@@ -370,13 +382,20 @@ if [ "$RUN_SYSTEM" = true ]; then
     fi
 fi
 
+END_USED_KB=$(df -kP "$TARGET_HOME" | awk 'NR==2 {print $3}')
+END_AVAIL_KB=$(df -kP "$TARGET_HOME" | awk 'NR==2 {print $4}')
+DIFF_USED_KB=$((START_USED_KB - END_USED_KB))
+
 echo ""
 echo "=========================================================="
 echo " Non-Docker Cleanup Complete!"
-echo " Updated Disk Space:"
-df -h "$TARGET_HOME"
-if [ "$RUN_SYSTEM" = true ]; then
-    df -h /
+echo " Disk Space Comparison ($TARGET_HOME):"
+echo "   Before:    $(format_kb "$START_USED_KB") used, $(format_kb "$START_AVAIL_KB") available"
+echo "   After:     $(format_kb "$END_USED_KB") used, $(format_kb "$END_AVAIL_KB") available"
+if [ "$DIFF_USED_KB" -gt 0 ]; then
+    echo "   Reclaimed: $(format_kb "$DIFF_USED_KB")"
+else
+    echo "   Reclaimed: 0 KB (no net change)"
 fi
 echo "=========================================================="
 echo " GUARANTEE VERIFIED: Docker daemon, containers, images,"

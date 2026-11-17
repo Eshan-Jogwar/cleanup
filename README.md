@@ -7,11 +7,12 @@ Audit commands and automation scripts to reclaim 20–50 GB of compiler caches, 
 ## Table of Contents
 
 - [Overview](#overview)
+- [Script Quick Reference (SCRIPTS.md)](SCRIPTS.md)
 - [Diagnostic Baseline](#diagnostic-baseline)
 - [Automated Scripts](#automated-scripts)
   - [1. Project Artifacts (`cleanup_artifacts.sh`)](#1-project-artifacts-cleanup_artifactssh)
   - [2. Zero-Docker Toolchains (`cleanup_no_docker.sh`)](#2-zero-docker-toolchains-cleanup_no_dockersh)
-  - [3. Docker Storage (`cleanup_docker.sh`)](#3-docker-storage-cleanup_dockersh)
+  - [3. Docker Storage (`cleanup_docker.sh` & `cleanup_docker_unused.sh`)](#3-docker-storage-cleanup_dockersh--cleanup_docker_unusedsh)
   - [4. Legacy Single-Scope Scripts](#4-legacy-single-scope-scripts)
 - [Manual Cleanup Reference](#manual-cleanup-reference)
   - [Phase 1: Safe Toolchain & Package Caches](#phase-1-safe-toolchain--package-caches)
@@ -67,7 +68,11 @@ docker system df
 
 ## Automated Scripts
 
-The repository provides modular, standalone Bash scripts for distinct cleanup tasks.
+The repository provides standalone scripts tailored for **Linux** (repository root), **macOS** ([`mac/`](mac/)), and **Windows** ([`windows/`](windows/)). For the cross-platform command matrix and criticality ratings, see [`SCRIPTS.md`](SCRIPTS.md).
+
+- **Linux:** Native Bash scripts in root (`./cleanup_*.sh`)
+- **macOS:** Native Bash scripts in `mac/` (`./mac/cleanup_*.sh`) using `~/Library/Caches/`, Xcode `DerivedData`, and Homebrew
+- **Windows:** Native PowerShell scripts in `windows/` (`.\windows\cleanup_*.ps1`) using `%LOCALAPPDATA%`, `%APPDATA%`, and Windows Update stores
 
 ### 1. Project Artifacts (`cleanup_artifacts.sh`)
 
@@ -132,10 +137,11 @@ sudo ./cleanup_no_docker.sh -s
 
 ---
 
-### 3. Docker Storage (`cleanup_docker.sh`)
+### 3. Docker Storage (`cleanup_docker.sh` & `cleanup_docker_unused.sh`)
 
 Exclusively manages Docker resources. Does not touch host files, local project code, or non-Docker caches.
 
+#### Standard Docker Cleanup (`cleanup_docker.sh`)
 - **Pre-flight check:** Verifies Docker CLI availability and active daemon connectivity before running.
 - **Default behavior (Safe Prune):**
   - Prunes stopped containers (`docker container prune -f`).
@@ -160,6 +166,20 @@ Exclusively manages Docker resources. Does not touch host files, local project c
 
 # Combined deep prune with volumes
 ./cleanup_docker.sh -a -v
+```
+
+#### Purge All Unused Docker Data (`cleanup_docker_unused.sh`)
+Purges everything not currently active. Removes all stopped containers, all unreferenced images, all unattached volumes, all unused networks, and all builder cache in one pass. Running containers, active images, and attached volumes remain intact.
+
+```bash
+# Preview inactive containers, images, and volumes to be purged
+./cleanup_docker_unused.sh --dry-run
+
+# Interactive purge (prompts before deleting unattached volumes/images)
+./cleanup_docker_unused.sh
+
+# Force purge without confirmation prompt
+./cleanup_docker_unused.sh -f
 ```
 
 ---
