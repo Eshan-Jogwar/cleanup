@@ -39,7 +39,17 @@ Linux development workstations accumulate regenerable files across package manag
 
 ## Diagnostic Baseline
 
-Run these read-only commands before cleaning to identify where storage is consumed:
+You can run the automated 100% read-only audit script:
+
+```bash
+# Automated full diagnostic scan & report (strictly zero deletions)
+./scan_disk.sh
+
+# Or with deep inspection for project node_modules and custom large-file threshold
+./scan_disk.sh -d -t 50M
+```
+
+Alternatively, run these individual read-only commands:
 
 ```bash
 # 1. Check root filesystem capacity and mount points
